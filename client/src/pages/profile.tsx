@@ -295,15 +295,20 @@ export default function Profile() {
         {watchlist.map((item) => {
           // Map internal Movie -> MovieCard props
           const movieCardProps = {
-           id: parseInt(item.movie.id, 10),
+            id: Number(item.movie.id),
             title: item.movie.title,
-           overview: item.movie.synopsis ?? "",
-           poster_path: item.movie.posterUrl ?? "",
-           backdrop_path: item.movie.backdropUrl ?? "",
-            release_date: `${item.movie.releaseYear}-01-01`,
-            vote_average: parseFloat(item.movie.averageRating ?? "0"),
-            genre_ids: [], // map your genre strings to TMDB IDs if needed
-};
+            overview: item.movie.synopsis ?? "",
+            poster_path: item.movie.posterUrl 
+              ? item.movie.posterUrl.replace(/^https?:\/\/image\.tmdb\.org\/t\/p\/w500/, "") // strip if full URL
+              : null,
+            backdrop_path: item.movie.backdropUrl 
+              ? item.movie.backdropUrl.replace(/^https?:\/\/image\.tmdb\.org\/t\/p\/w780/, "")
+              : null,
+            release_date: item.movie.releaseYear ? `${item.movie.releaseYear}-01-01` : null,
+            vote_average: item.movie.averageRating ? Number(item.movie.averageRating) : 0,
+            genre_ids: [], // you can map these later if you want
+            };
+
 
 
           return (

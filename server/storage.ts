@@ -65,9 +65,18 @@ export class Storage {
     if (year) where.releaseYear = year;
     if (minRating) where.averageRating = { gte: minRating };
 
+    // Map frontend sort param names to actual Prisma model field names
+    const sortFieldMap: Record<string, string> = {
+      title: 'title',
+      year: 'releaseYear',
+      rating: 'averageRating',
+      reviews: 'reviewCount',
+    };
+    const orderByField = sortFieldMap[sort || 'title'] || 'title';
+
     const movies = await prisma.movie.findMany({
       where,
-      orderBy: { [sort || 'title']: 'asc' },
+      orderBy: { [orderByField]: sort === 'rating' || sort === 'reviews' ? 'desc' : 'asc' },
       skip: (page - 1) * limit,
       take: limit,
     });
@@ -79,26 +88,28 @@ export class Storage {
   async getFeaturedMovies(): Promise<Movie[]> {
     const featuredMovies = await tmdbService.getFeaturedMovies();
     for (const movie of featuredMovies) {
-      const existingMovie = await prisma.movie.findFirst({ where: { tmdbId: movie.id } });
-      if (!existingMovie) {
-        const movieDetails = await tmdbService.getMovieDetails(movie.id);
-        await this.createMovie({
-          tmdbId: movie.id,
-          title: movie.title,
-          synopsis: movie.overview,
-          director: movieDetails.credits.crew.find(c => c.job === 'Director')?.name || '',
-          cast: movieDetails.credits.cast.map(c => c.name).slice(0, 10),
-          genres: movie.genre_ids.map(mapTmdbGenreToEnum).filter((g) => g !== undefined) as Genre[],
-          releaseYear: new Date(movie.release_date).getFullYear(),
-          duration: movieDetails.runtime,
-          posterUrl: `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
-          backdropUrl: `https://image.tmdb.org/t/p/original${movie.backdrop_path}`,
-          trailerUrl: movieDetails.videos.results.find(v => v.type === 'Trailer')?.key || '',
-          averageRating: movie.vote_average / 2,
-          featured: true,
-          trending: false,
-        });
-      }
+      const movieDetails = await tmdbService.getMovieDetails(movie.id);
+      const movieData = {
+        tmdbId: movie.id,
+        title: movie.title,
+        synopsis: movie.overview,
+        director: movieDetails.credits.crew.find(c => c.job === 'Director')?.name || '',
+        cast: movieDetails.credits.cast.map(c => c.name).slice(0, 10),
+        genres: movie.genre_ids.map(mapTmdbGenreToEnum).filter((g) => g !== undefined) as Genre[],
+        releaseYear: new Date(movie.release_date).getFullYear(),
+        duration: movieDetails.runtime,
+        posterUrl: `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
+        backdropUrl: `https://image.tmdb.org/t/p/original${movie.backdrop_path}`,
+        trailerUrl: movieDetails.videos.results.find(v => v.type === 'Trailer')?.key || '',
+        averageRating: movie.vote_average / 2,
+        featured: true,
+      };
+      // Use upsert to avoid P2002 unique constraint crash when a movie already exists
+      await prisma.movie.upsert({
+        where: { tmdbId: movie.id },
+        create: { ...movieData, trending: false },
+        update: { featured: true },
+      });
     }
     return prisma.movie.findMany({ where: { featured: true } });
   }
@@ -106,26 +117,28 @@ export class Storage {
   async getTrendingMovies(): Promise<Movie[]> {
     const trendingMovies = await tmdbService.getTrendingMovies();
     for (const movie of trendingMovies) {
-      const existingMovie = await prisma.movie.findFirst({ where: { tmdbId: movie.id } });
-      if (!existingMovie) {
-        const movieDetails = await tmdbService.getMovieDetails(movie.id);
-        await this.createMovie({
-          tmdbId: movie.id,
-          title: movie.title,
-          synopsis: movie.overview,
-          director: movieDetails.credits.crew.find(c => c.job === 'Director')?.name || '',
-          cast: movieDetails.credits.cast.map(c => c.name).slice(0, 10),
-          genres: movie.genre_ids.map(mapTmdbGenreToEnum).filter((g) => g !== undefined) as Genre[],
-          releaseYear: new Date(movie.release_date).getFullYear(),
-          duration: movieDetails.runtime,
-          posterUrl: `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
-          backdropUrl: `https://image.tmdb.org/t/p/original${movie.backdrop_path}`,
-          trailerUrl: movieDetails.videos.results.find(v => v.type === 'Trailer')?.key || '',
-          averageRating: movie.vote_average / 2,
-          trending: true,
-          featured: false,
-        });
-      }
+      const movieDetails = await tmdbService.getMovieDetails(movie.id);
+      const movieData = {
+        tmdbId: movie.id,
+        title: movie.title,
+        synopsis: movie.overview,
+        director: movieDetails.credits.crew.find(c => c.job === 'Director')?.name || '',
+        cast: movieDetails.credits.cast.map(c => c.name).slice(0, 10),
+        genres: movie.genre_ids.map(mapTmdbGenreToEnum).filter((g) => g !== undefined) as Genre[],
+        releaseYear: new Date(movie.release_date).getFullYear(),
+        duration: movieDetails.runtime,
+        posterUrl: `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
+        backdropUrl: `https://image.tmdb.org/t/p/original${movie.backdrop_path}`,
+        trailerUrl: movieDetails.videos.results.find(v => v.type === 'Trailer')?.key || '',
+        averageRating: movie.vote_average / 2,
+        trending: true,
+      };
+      // Use upsert to avoid P2002 unique constraint crash when a movie already exists
+      await prisma.movie.upsert({
+        where: { tmdbId: movie.id },
+        create: { ...movieData, featured: false },
+        update: { trending: true },
+      });
     }
     return prisma.movie.findMany({ where: { trending: true } });
   }
