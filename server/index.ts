@@ -6,8 +6,8 @@ import { seed } from "./seed";
 import { Storage } from "./storage";
 
 dotenv.config();
-console.log(process.env.TMDB_API_BASE_URL);
-console.log('TMDB_API_KEY:', process.env.TMDB_API_KEY);
+console.log('TMDB API Base URL:', process.env.TMDB_API_BASE_URL || 'Not configured');
+console.log('TMDB API Key configured:', !!process.env.TMDB_API_KEY);
 
 
 const app = express();
