@@ -47,6 +47,19 @@ app.use((req, res, next) => {
 (async () => {
   if (app.get("env") === "development") {
     await seed(new Storage());
+  } else {
+    // In production, seed the database if it has no reviews
+    try {
+      const { PrismaClient } = await import("@prisma/client");
+      const prisma = new PrismaClient();
+      const reviewCount = await prisma.review.count();
+      if (reviewCount === 0) {
+        console.log("No reviews found in production database. Seeding initial reviews...");
+        await seed(new Storage());
+      }
+    } catch (e) {
+      console.error("Failed to auto-seed production database:", e);
+    }
   }
 
   const server = await registerRoutes(app);
